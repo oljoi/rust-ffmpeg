@@ -73,7 +73,7 @@ impl StreamIo {
     fn new_impl<T>(
         stream: T,
         r: Option<unsafe extern "C" fn(*mut c_void, *mut u8, c_int) -> c_int>,
-        w: Option<unsafe extern "C" fn(*mut c_void, *const u8, c_int) -> c_int>,
+        w: Option<unsafe extern "C" fn(*mut c_void, WriteBufferType, c_int) -> c_int>,
         s: Option<unsafe extern "C" fn(*mut c_void, i64, c_int) -> i64>,
     ) -> Result<Self, Error> {
         let buffer = unsafe { ffi::av_malloc(BUFFER_SIZE) };
@@ -148,7 +148,7 @@ unsafe extern "C" fn read<T: Read>(opaque: *mut c_void, buf: *mut u8, buf_size: 
 }
 unsafe extern "C" fn write<T: Write>(
     opaque: *mut c_void,
-    buf: *const u8,
+    buf: WriteBufferType,
     buf_size: c_int,
 ) -> c_int {
     let buf = unsafe { std::slice::from_raw_parts(buf, buf_size as usize) };
@@ -196,3 +196,9 @@ fn map_io_error(e: std::io::Error) -> i32 {
         _ => ffi::AVERROR(ffi::EIO),
     }
 }
+
+#[cfg(not(feature = "ffmpeg_7_0"))]
+type WriteBufferType = *mut u8;
+
+#[cfg(feature = "ffmpeg_7_0")]
+type WriteBufferType = *const u8;
