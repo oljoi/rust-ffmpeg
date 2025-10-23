@@ -234,20 +234,15 @@ pub fn input_from_stream(
         (*ps).pb = custom_io.as_mut_ptr();
 
         let filename = filename.map(|f| CString::new(f).unwrap());
-        let filename_ptr = filename.as_ref().map_or(std::ptr::null(), |f| f.as_ptr());
+        let filename_ptr = filename.as_ref().map_or(ptr::null(), |f| f.as_ptr());
 
         let result = if let Some(opts) = options {
             let mut opts = opts.disown();
-            let res = avformat_open_input(&mut ps, filename_ptr, std::ptr::null(), &mut opts);
+            let res = avformat_open_input(&mut ps, filename_ptr, ptr::null_mut(), &mut opts);
             Dictionary::own(opts);
             res
         } else {
-            avformat_open_input(
-                &mut ps,
-                filename_ptr,
-                std::ptr::null(),
-                std::ptr::null_mut(),
-            )
+            avformat_open_input(&mut ps, filename_ptr, ptr::null_mut(), ptr::null_mut())
         };
 
         match result {
@@ -390,10 +385,10 @@ pub fn output_to_stream(
         let mut ps = ptr::null_mut();
 
         let filename = filename.map(|f| CString::new(f).unwrap());
-        let filename_ptr = filename.as_ref().map_or(std::ptr::null(), |f| f.as_ptr());
+        let filename_ptr = filename.as_ref().map_or(ptr::null(), |f| f.as_ptr());
 
         let format = format.map(|f| CString::new(f).unwrap());
-        let format_ptr = format.as_ref().map_or(std::ptr::null(), |f| f.as_ptr());
+        let format_ptr = format.as_ref().map_or(ptr::null(), |f| f.as_ptr());
 
         match avformat_alloc_output_context2(&mut ps, ptr::null_mut(), format_ptr, filename_ptr) {
             0 => {
