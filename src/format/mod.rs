@@ -219,6 +219,51 @@ where
     }
 }
 
+/// Opens an input file using a custom I/O stream.
+/// Create `format::context::StreamIo` first, then pass to this function.
+///
+/// You can optionally include a filename to help with format detection,
+/// and a dictionary of options to configure the format context.
+pub fn input_from_stream(
+    mut custom_io: context::StreamIo,
+    filename: Option<&str>,
+    options: Option<Dictionary>,
+) -> Result<context::Input, Error> {
+    unsafe {
+        let mut ps = avformat_alloc_context();
+        (*ps).pb = custom_io.as_mut_ptr();
+
+        let filename = filename.map(|f| CString::new(f).unwrap());
+        let filename_ptr = filename.as_ref().map_or(std::ptr::null(), |f| f.as_ptr());
+
+        let result = if let Some(opts) = options {
+            let mut opts = opts.disown();
+            let res = avformat_open_input(&mut ps, filename_ptr, std::ptr::null(), &mut opts);
+            Dictionary::own(opts);
+            res
+        } else {
+            avformat_open_input(
+                &mut ps,
+                filename_ptr,
+                std::ptr::null(),
+                std::ptr::null_mut(),
+            )
+        };
+
+        match result {
+            0 => match avformat_find_stream_info(ps, ptr::null_mut()) {
+                r if r >= 0 => Ok(context::Input::wrap_with_custom_io(ps, custom_io)),
+                e => {
+                    avformat_close_input(&mut ps);
+                    Err(Error::from(e))
+                }
+            },
+
+            e => Err(Error::from(e)),
+        }
+    }
+}
+
 pub fn output<P: AsRef<Path> + ?Sized>(path: &P) -> Result<context::Output, Error> {
     unsafe {
         let mut ps = ptr::null_mut();
@@ -324,6 +369,37 @@ pub fn output_as_with<P: AsRef<Path> + ?Sized>(
                     0 => Ok(context::Output::wrap(ps)),
                     e => Err(Error::from(e)),
                 }
+            }
+
+            e => Err(Error::from(e)),
+        }
+    }
+}
+
+/// Creates the output context where the result is written to the provided Stream.
+/// Create a writable `format::context::StreamIo` first, then pass to this function.
+///
+/// You can optionally include a filename to infer the output format from that,
+/// or specify the format explicitly.
+pub fn output_to_stream(
+    mut custom_io: context::StreamIo,
+    filename: Option<&str>,
+    format: Option<&str>,
+) -> Result<context::Output, Error> {
+    unsafe {
+        let mut ps = ptr::null_mut();
+
+        let filename = filename.map(|f| CString::new(f).unwrap());
+        let filename_ptr = filename.as_ref().map_or(std::ptr::null(), |f| f.as_ptr());
+
+        let format = format.map(|f| CString::new(f).unwrap());
+        let format_ptr = format.as_ref().map_or(std::ptr::null(), |f| f.as_ptr());
+
+        match avformat_alloc_output_context2(&mut ps, ptr::null_mut(), format_ptr, filename_ptr) {
+            0 => {
+                (*ps).pb = custom_io.as_mut_ptr();
+
+                Ok(context::Output::wrap_with_custom_io(ps, custom_io))
             }
 
             e => Err(Error::from(e)),
